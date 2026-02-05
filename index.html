@@ -4,230 +4,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GeoSTL Maker - Disseny Geogràfic 3D</title>
+    <title>GeoSTL Maker - Generador d'Accidents Geogràfics</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #f8fafc; font-family: ui-sans-serif, system-ui, sans-serif; }
-        #root { height: 100vh; }
-        input[type="range"] { cursor: pointer; }
-        /* Estils per a la barra de scroll de la sidebar */
-        .sidebar::-webkit-scrollbar { width: 4px; }
-        .sidebar::-webkit-scrollbar-track { background: transparent; }
-        .sidebar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        body { margin: 0; overflow: hidden; background-color: #f8fafc; }
+        #root { height: 100vh; display: flex; flex-direction: column; }
     </style>
-    <script type="importmap">
+<script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@19.0.0",
-    "react-dom": "https://esm.sh/react-dom@19.0.0",
-    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
-    "three": "https://esm.sh/three@0.174.0",
-    "@react-three/fiber": "https://esm.sh/@react-three/fiber@8.17.14?external=three,react,react-dom",
-    "@react-three/drei": "https://esm.sh/@react-three/drei@9.121.4?external=three,react,react-dom",
-    "htm": "https://esm.sh/htm@3.1.1",
-    "react/": "https://esm.sh/react@^19.2.4/"
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "three": "https://esm.sh/three@^0.182.0",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "@react-three/fiber": "https://esm.sh/@react-three/fiber@^9.5.0",
+    "@react-three/drei": "https://esm.sh/@react-three/drei@^10.7.7"
   }
 }
 </script>
+<link rel="stylesheet" href="/index.css">
 </head>
 <body>
     <div id="root"></div>
-
-    <script type="module">
-        // Importem utilitzant els noms definits a l'importmap
-        import React, { useState, useEffect, useMemo } from 'react';
-        import ReactDOM from 'react-dom/client';
-        import htm from 'htm';
-        import * as THREE from 'three';
-        import { Canvas } from '@react-three/fiber';
-        import { OrbitControls, PerspectiveCamera, Environment, Grid, Center } from '@react-three/drei';
-
-        const html = htm.bind(React.createElement);
-
-        // --- LÒGICA DE SOROLL DETERMINISTA ---
-        class SimpleNoise {
-            constructor(seed = 123) {
-                this.p = new Array(512);
-                const perm = new Array(256).fill(0).map((_, i) => i);
-                let s = seed;
-                const lcg = () => (s = (s * 1664525 + 1013904223) % 4294967296) / 4294967296;
-                for (let i = 255; i > 0; i--) {
-                    const j = Math.floor(lcg() * (i + 1));
-                    [perm[i], perm[j]] = [perm[j], perm[i]];
-                }
-                for (let i = 0; i < 512; i++) this.p[i] = perm[i & 255];
-            }
-            fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
-            lerp(t, a, b) { return a + t * (b - a); }
-            grad(h, x, y, z) {
-                const i = h & 15;
-                const u = i < 8 ? x : y, v = i < 4 ? y : i === 12 || i === 14 ? x : z;
-                return ((i & 1) === 0 ? u : -u) + ((i & 2) === 0 ? v : -v);
-            }
-            noise2D(x, y) {
-                const X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
-                x -= Math.floor(x); y -= Math.floor(y);
-                const u = this.fade(x), v = this.fade(y);
-                const A = this.p[X] + Y, AA = this.p[A], AB = this.p[A + 1];
-                const B = this.p[X + 1] + Y, BA = this.p[B], BB = this.p[B + 1];
-                return this.lerp(v, this.lerp(u, this.grad(this.p[AA], x, y, 0), this.grad(this.p[BA], x - 1, y, 0)),
-                                    this.lerp(u, this.grad(this.p[AB], x, y - 1, 0), this.grad(this.p[BB], x - 1, y - 1, 0)));
-            }
-        }
-
-        const LandformType = {
-            ISLAND: 'Illa', ARCHIPELAGO: 'Arxipèlag', BAY: 'Badia', CAPE: 'Cap', PENINSULA: 'Península',
-            VALLEY: 'Vall', PLATEAU: 'Podi / Meseta', MOUNTAIN: 'Muntanya', RANGE: 'Serralada',
-            VOLCANO: 'Volcà', CANYON: 'Canyó'
-        };
-
-        const generateTerrain = (p) => {
-            const noise = new SimpleNoise(p.seed), shape = new SimpleNoise(p.seed + 99);
-            const res = p.resolution, step = p.size / res, half = p.size / 2;
-            const pos = new Float32Array((res + 1) * (res + 1) * 3);
-            const idx = new Uint32Array(res * res * 6);
-
-            for (let i = 0; i <= res; i++) {
-                for (let j = 0; j <= res; j++) {
-                    const nx = i / res, ny = j / res;
-                    const dist = Math.sqrt(Math.pow(nx - 0.5, 2) + Math.pow(ny - 0.5, 2)) * 2;
-                    let h = 0, amp = 1, f = p.noiseScale;
-                    for (let o = 0; o < 4; o++) { h += noise.noise2D(nx * f, ny * f) * amp; amp *= p.roughness; f *= 2; }
-                    h = (h + 1) / 2;
-                    let mask = 1;
-                    if (p.type === LandformType.ISLAND) mask = Math.max(0, 1 - dist * 1.4);
-                    else if (p.type === LandformType.MOUNTAIN) mask = Math.pow(Math.max(0, 1 - dist * 1.6), 2);
-                    else if (p.type === LandformType.VOLCANO) mask = Math.pow(Math.max(0, 1 - dist * 1.4), 1.6) * (dist < 0.15 ? Math.pow(dist/0.15, 2) : 1);
-                    
-                    const fh = (h * mask * p.maxHeight) + p.baseThickness;
-                    const k = i * (res + 1) + j;
-                    pos[k * 3] = i * step - half; pos[k * 3 + 1] = fh; pos[k * 3 + 2] = j * step - half;
-                }
-            }
-            let c = 0;
-            for (let i = 0; i < res; i++) {
-                for (let j = 0; j < res; j++) {
-                    const a = i * (res+1) + j, b = (i+1) * (res+1) + j, d = i * (res+1) + (j+1), e = (i+1) * (res+1) + (j+1);
-                    idx[c++] = a; idx[c++] = d; idx[c++] = b; idx[c++] = b; idx[c++] = d; idx[c++] = e;
-                }
-            }
-            return { positions: pos, indices: idx };
-        };
-
-        const exportSTL = (m) => {
-            let s = "solid Geo\n";
-            const g = (i) => [m.positions[i*3], m.positions[i*3+1], m.positions[i*3+2]];
-            for (let i = 0; i < m.indices.length; i += 3) {
-                const v1 = g(m.indices[i]), v2 = g(m.indices[i+1]), v3 = g(m.indices[i+2]);
-                s += `facet normal 0 0 0\nouter loop\nvertex ${v1[0]} ${v1[1]} ${v1[2]}\nvertex ${v2[0]} ${v2[1]} ${v2[2]}\nvertex ${v3[0]} ${v3[1]} ${v3[2]}\nendloop\nendfacet\n`;
-            }
-            return s + "endsolid Geo\n";
-        };
-
-        // --- COMPONENTS ---
-        const Viewer = ({ meshData, params }) => {
-            const geo = useMemo(() => {
-                const g = new THREE.BufferGeometry();
-                g.setAttribute('position', new THREE.BufferAttribute(meshData.positions, 3));
-                g.setIndex(new THREE.BufferAttribute(meshData.indices, 1));
-                g.computeVertexNormals();
-                return g;
-            }, [meshData]);
-
-            return html`
-                <${Canvas} shadows>
-                    <${PerspectiveCamera} makeDefault position=${[params.size, params.size, params.size]} fov=${45} />
-                    <${OrbitControls} makeDefault />
-                    <ambientLight intensity=${1.5} />
-                    <directionalLight position=${[50, 100, 50]} intensity=${2} />
-                    <${Center} top>
-                        <mesh geometry=${geo}>
-                            <meshStandardMaterial color="#3b82f6" roughness=${0.6} metalness=${0.1} />
-                        </mesh>
-                    <//>
-                    <${Grid} infiniteGrid cellSize=${10} sectionSize=${50} sectionColor="#94a3b8" cellColor="#cbd5e1" />
-                    <${Environment} preset="city" />
-                <//>
-            `;
-        };
-
-        const App = () => {
-            const [p, setP] = useState({ 
-                type: LandformType.ISLAND, size: 100, maxHeight: 25, resolution: 64, 
-                noiseScale: 4, roughness: 0.5, distortion: 0.4, seed: 42, baseThickness: 3 
-            });
-            const [mesh, setMesh] = useState(null);
-
-            useEffect(() => {
-                setMesh(generateTerrain(p));
-            }, [p]);
-
-            const dl = () => {
-                const blob = new Blob([exportSTL(mesh)], { type: 'text/plain' });
-                const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Geo_${p.type}.stl`; a.click();
-            };
-
-            return html`
-                <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden">
-                    <div className="sidebar w-full md:w-80 bg-white border-r p-6 overflow-y-auto flex flex-col z-10 shadow-xl">
-                        <div className="mb-6">
-                            <h1 className="text-xl font-black flex items-center gap-2">
-                                <div className="bg-blue-600 text-white p-1.5 rounded-lg">
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 002 2h2.945M8 3.935A9 9 0 1116.065 19.065M8 3.935a8.963 8.963 0 018.13-1.13" /></svg>
-                                </div>
-                                GeoSTL Maker
-                            </h1>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Standalone Edition</p>
-                        </div>
-
-                        <div className="space-y-5 flex-1 pr-1">
-                            <div>
-                                <label className="text-[10px] font-black text-slate-500 uppercase mb-1.5 block">Accident Geogràfic</label>
-                                <select className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500" value=${p.type} onChange=${e => setP({...p, type: e.target.value})}>
-                                    ${Object.values(LandformType).map(t => html`<option key=${t} value=${t}>${t}</option>`)}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="text-[10px] font-black text-slate-500 uppercase mb-1.5 block">Codi (Seed): ${p.seed}</label>
-                                <div className="flex gap-2">
-                                    <input type="number" className="flex-1 p-2 bg-slate-100 border border-slate-200 rounded-lg text-sm font-mono" value=${p.seed} onChange=${e => setP({...p, seed: parseInt(e.target.value)||0})} />
-                                    <button onClick=${() => setP({...p, seed: Math.floor(Math.random()*9999)})} className="p-2 bg-slate-900 text-white rounded-lg hover:bg-black transition-colors text-sm">🎲</button>
-                                </div>
-                            </div>
-
-                            <div className="pt-2 border-t border-slate-50">
-                                <label className="text-[10px] font-black text-slate-500 uppercase mb-1 block">Mida Base: ${p.size}mm</label>
-                                <input type="range" min="20" max="200" className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none accent-blue-600" value=${p.size} onChange=${e => setP({...p, size: parseInt(e.target.value)})} />
-                            </div>
-
-                            <div>
-                                <label className="text-[10px] font-black text-slate-500 uppercase mb-1 block">Altura: ${p.maxHeight}mm</label>
-                                <input type="range" min="5" max="80" className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none accent-blue-600" value=${p.maxHeight} onChange=${e => setP({...p, maxHeight: parseInt(e.target.value)})} />
-                            </div>
-                        </div>
-
-                        <div className="mt-8 pt-6 border-t border-slate-100">
-                            <button onClick=${dl} className="w-full py-4 bg-blue-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all active:scale-95">
-                                Descarregar STL
-                            </button>
-                            <div className="mt-6 text-[9px] text-slate-400 font-bold leading-tight uppercase tracking-tighter">
-                                <p>Llicència: <span className="text-slate-900">GNU GPL</span></p>
-                                <p>Autoria: <span className="text-slate-900">Aarón Fortuño & Gemini AI</span></p>
-                                <p className="text-green-600 mt-2">GitHub Pages Ready ✅</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 relative bg-slate-100 canvas-container">
-                        ${mesh && html`<${Viewer} meshData=${mesh} params=${p} />`}
-                    </div>
-                </div>
-            `;
-        };
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(html`<${App} />`);
-    </script>
+<script type="module" src="/index.tsx"></script>
 </body>
 </html>
