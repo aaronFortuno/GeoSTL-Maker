@@ -1,0 +1,5 @@
+{
+  "name": "GeoSTL Maker",
+  "description": "Una eina educativa per generar i descarregar models 3D (STL) d'accidents geogràfics per a impressió 3D.",
+  "requestFramePermissions": []
+}
