@@ -1,46 +1,23 @@
 
-# GeoSTL Maker
+# GeoSTL Maker (GitHub Pages Edition)
 
-GeoSTL Maker és una eina educativa interactiva per dissenyar i generar models 3D procedimentals d'accidents geogràfics. L'objectiu principal és facilitar la creació de material didàctic per a escoles i instituts, permetent exportar els models a format STL per a la seva posterior impressió en 3D.
+Aquesta versió de l'aplicació està optimitzada per funcionar directament al navegador sense necessitat de Node.js ni cap eina de compilació.
 
-## Característiques
+## Com publicar a GitHub Pages
 
-- **Varietat Geogràfica**: Genera illes, arxipèlags, badies, caps, penínsules, muntanyes, serralades, canyons, volcans i més.
-- **Generació Procedimental**: Basat en soroll de Perlin millorat per obtenir formes realistes i orgàniques.
-- **Control de Seed**: Permet replicar dissenys exactes mitjançant un codi numèric.
-- **Actualització en Temps Real**: Visualitza els canvis en els paràmetres (mida, altura, distorsió, detall) de forma instantània.
-- **Visor 3D Interactiu**: Explora el model generat abans de descarregar-lo.
-- **Exportació STL**: Genera fitxers STL sòlids i optimitzats per a impressió 3D.
+1. **Crea un repositori** a GitHub.
+2. **Puja el fitxer `index.html`** (tot el codi està contingut aquí per màxima compatibilitat).
+3. Ves a **Settings > Pages** al teu repositori.
+4. Selecciona la branca `main` i la carpeta `/ (root)` com a font.
+5. Prem **Save**. En un minut, la teva web estarà activa a `https://el-teu-usuari.github.io/el-teu-repositori/`.
 
-## Funcionament
+## Per què no necessita Node.js?
 
-1. **Selecció de Tipus**: Tria l'accident geogràfic que vols estudiar des del menú desplegable.
-2. **Ajust de Paràmetres**:
-   - **Mida Base**: Dimensions de la placa de suport.
-   - **Altura Màxima**: Escala vertical del relleu.
-   - **Distorsió**: Controla com de sinuoses o orgàniques són les línies de costa i valls.
-   - **Complexitat Detall**: Defineix la rugositat i el nivell de detall del terreny.
-3. **Seed**: Si vols un disseny nou del mateix tipus, prem el botó de randomitzar seed o escriu un número manualment.
-4. **Resolució**: Tria la densitat de la malla (més resolució implica més detall però fitxers més pesants).
-5. **Descàrrega**: Quan estiguis satisfet, prem "Descarregar STL" per obtenir el fitxer per al teu laminador (slicer).
-
-## Instal·lació
-
-Aquesta és una aplicació web basada en React. Per executar-la localment:
-
-1. Assegura't de tenir instal·lat **Node.js**.
-2. Descomprimeix el projecte en una carpeta.
-3. Instal·la les dependències:
-   ```bash
-   npm install
-   ```
-4. Executa el servidor de desenvolupament:
-   ```bash
-   npm run dev
-   ```
-5. Obre el navegador a l'adreça indicada (normalment `http://localhost:5173`).
+- **ES Modules (ESM)**: Utilitzem la capacitat nativa dels navegadors moderns per carregar mòduls de JavaScript.
+- **esm.sh**: Les dependències (React, Three.js) es carreguen directament des d'un CDN global.
+- **htm**: En lloc de JSX (que requereix Node per compilar), utilitzem `htm`, que permet escriure plantilles similars a JSX que s'executen nativament.
 
 ## Llicència i Autoria
 
 **Llicència**: GNU GPL  
-**Autoria**: Aarón Fortuño (afortun8@xtec.cat) amb l'ajuda de Gemini AI.
+**Autoria**: Aarón Fortuño (afortun8@xtec.cat) amb Gemini AI.
